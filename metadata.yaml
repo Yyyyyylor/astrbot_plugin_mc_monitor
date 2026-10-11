@@ -1,0 +1,9 @@
+name: astrbot_plugin_mc_monitor
+display_name: Minecraft 持续监控
+desc: 增量日志、只读容器指标与持久化 QQ 私聊告警，支持 AstrBot 人格及 LLM 模板降级。
+version: 1.0.0
+author: Cheney
+repo: https://github.com/Yyyyyylor/astrbot_plugin_mc_monitor
+astrbot_version: ">=4.9.2,<5"
+support_platforms:
+  - aiocqhttp

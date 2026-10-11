@@ -1,0 +1,806 @@
+{
+  "enabled": {
+    "description": "启用持续监控",
+    "type": "bool",
+    "default": false,
+    "hint": "完成日志路径与私聊目标配置后开启；关闭时保留游标与待发队列。"
+  },
+  "timezone": {
+    "description": "MC 日志时区",
+    "type": "string",
+    "default": "Asia/Shanghai",
+    "hint": "必须与 MC 日志实际时区一致；日志未带日期时按文件时间与日期切换推断。"
+  },
+  "poll_seconds": {
+    "description": "监控轮询间隔（秒）",
+    "type": "float",
+    "default": 5.0,
+    "minimum": 1,
+    "maximum": 3600
+  },
+  "io_timeout": {
+    "description": "网络超时（秒）",
+    "type": "float",
+    "default": 5.0,
+    "minimum": 0.1,
+    "maximum": 60
+  },
+  "retention_days": {
+    "description": "已处理事件去重保留天数",
+    "type": "int",
+    "default": 14,
+    "minimum": 1,
+    "maximum": 365
+  },
+  "logs": {
+    "description": "日志增量读取",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用日志",
+        "type": "bool",
+        "default": true
+      },
+      "path": {
+        "description": "AstrBot 容器内日志路径",
+        "type": "string",
+        "default": "/mc-logs/latest.log",
+        "hint": "挂载整个 logs 目录为只读，不能只挂 latest.log 单文件。"
+      },
+      "initial_position": {
+        "description": "首次安装读取位置",
+        "type": "string",
+        "default": "end",
+        "options": [
+          "end",
+          "beginning"
+        ],
+        "hint": "已有游标始终续读；从末尾读取会使在线人数未知，直到启动日志或 RCON 校准。"
+      },
+      "rotation_glob": {
+        "description": "轮转文件匹配",
+        "type": "string",
+        "default": "*.log*",
+        "hint": "只查 logs 目录，支持 .log 和 .log.gz；压缩归档通过内容指纹匹配续读。"
+      },
+      "max_bytes": {
+        "description": "每轮最大读取字节",
+        "type": "int",
+        "default": 262144,
+        "minimum": 4096,
+        "maximum": 4194304
+      },
+      "max_line_bytes": {
+        "description": "单行最大字节",
+        "type": "int",
+        "default": 16384,
+        "minimum": 1024,
+        "maximum": 131072
+      },
+      "recovery_max_bytes": {
+        "description": "压缩归档恢复解压预算（字节）",
+        "type": "int",
+        "default": 67108864,
+        "minimum": 1048576,
+        "maximum": 268435456,
+        "hint": "每次匹配最多检查16份归档；超过预算或归档缺失时报告可能的日志缺口。"
+      }
+    }
+  },
+  "docker": {
+    "description": "Docker 只读桥接",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用容器状态和资源指标",
+        "type": "bool",
+        "default": false
+      },
+      "container": {
+        "description": "MC 容器名",
+        "type": "string",
+        "default": "minecraft"
+      },
+      "bridge_url": {
+        "description": "只读桥接服务地址",
+        "type": "string",
+        "default": "http://172.17.0.1:8765",
+        "hint": "仅访问配套桥接器 /snapshot；不要指向裸 Docker API。"
+      },
+      "secret_env": {
+        "description": "桥接 Token 所在环境变量名",
+        "type": "string",
+        "default": "MC_MONITOR_BRIDGE_TOKEN",
+        "hint": "填写变量名，不填写 Token。桥接器和 AstrBot 使用同一密钥。"
+      }
+    }
+  },
+  "status": {
+    "description": "Minecraft Java 状态探测",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用无响应检测",
+        "type": "bool",
+        "default": false
+      },
+      "host": {
+        "description": "MC 内网主机名",
+        "type": "string",
+        "default": "minecraft",
+        "hint": "使用内网直连地址，避免把 FRP 断线误判为 MC 故障。"
+      },
+      "port": {
+        "description": "Java 服务端端口",
+        "type": "int",
+        "default": 25565,
+        "minimum": 1,
+        "maximum": 65535
+      }
+    }
+  },
+  "rcon": {
+    "description": "可选 RCON 指标",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用 RCON",
+        "type": "bool",
+        "default": false
+      },
+      "host": {
+        "description": "RCON 内网主机名",
+        "type": "string",
+        "default": "minecraft"
+      },
+      "port": {
+        "description": "RCON 端口",
+        "type": "int",
+        "default": 25575,
+        "minimum": 1,
+        "maximum": 65535
+      },
+      "secret_env": {
+        "description": "RCON 密码所在环境变量名",
+        "type": "string",
+        "default": "MC_MONITOR_RCON_PASSWORD",
+        "hint": "RCON 本身有管理权限，应只在可信内网开放；插件仅发送固定只读命令。"
+      },
+      "performance_source": {
+        "description": "TPS/MSPT 命令能力",
+        "type": "string",
+        "default": "unavailable",
+        "options": [
+          "unavailable",
+          "paper"
+        ],
+        "hint": "仅确认 Paper 支持 tps / mspt 时选择 paper；原版默认不可用。"
+      }
+    }
+  },
+  "notifications": {
+    "description": "QQ 私聊通知",
+    "type": "object",
+    "items": {
+      "recipients": {
+        "description": "目标 UMO 列表",
+        "type": "list",
+        "default": [],
+        "hint": "每项为真实 platform_id:FriendMessage:session_id；管理员私聊发送 /mc绑定 可自动登记。"
+      },
+      "merge_seconds": {
+        "description": "普通事件合并窗口（秒）",
+        "type": "float",
+        "default": 10.0,
+        "minimum": 0,
+        "maximum": 3600
+      },
+      "max_batch": {
+        "description": "每条最多事件数",
+        "type": "int",
+        "default": 8,
+        "minimum": 1,
+        "maximum": 15
+      },
+      "queue_limit": {
+        "description": "待发记录上限（按接收者计数）",
+        "type": "int",
+        "default": 10000,
+        "hint": "达到上限暂停日志推进并记录错误，不静默丢弃待发事件。",
+        "minimum": 100,
+        "maximum": 100000
+      },
+      "send_timeout": {
+        "description": "主动消息发送超时（秒）",
+        "type": "float",
+        "default": 15.0,
+        "minimum": 1,
+        "maximum": 120
+      },
+      "retry_base": {
+        "description": "失败重试起始间隔（秒）",
+        "type": "float",
+        "default": 5.0,
+        "minimum": 1,
+        "maximum": 600
+      },
+      "retry_max": {
+        "description": "失败重试最长间隔（秒）",
+        "type": "float",
+        "default": 300.0,
+        "minimum": 5,
+        "maximum": 86400
+      },
+      "max_attempts": {
+        "description": "快速重试次数",
+        "type": "int",
+        "default": 5,
+        "hint": "超出后进入长期重试间隔；队列保留，重启继续。",
+        "minimum": 1,
+        "maximum": 20
+      },
+      "quiet_enabled": {
+        "description": "启用安静时段",
+        "type": "bool",
+        "default": false
+      },
+      "quiet_start": {
+        "description": "安静开始 HH:MM",
+        "type": "string",
+        "default": "23:00"
+      },
+      "quiet_end": {
+        "description": "安静结束 HH:MM",
+        "type": "string",
+        "default": "07:00",
+        "hint": "相同时间表示全天安静。普通事件延后，高等级可按下方开关立即发送。"
+      },
+      "high_bypass_quiet": {
+        "description": "高等级事件绕过安静时段",
+        "type": "bool",
+        "default": true
+      },
+      "recovery": {
+        "description": "发送恢复通知",
+        "type": "bool",
+        "default": true
+      },
+      "use_bound_recipients": {
+        "description": "启用命令绑定的私聊接收者",
+        "type": "bool",
+        "default": true,
+        "hint": "开启时与上方UMO列表取并集；关闭时只使用面板列表。管理员私聊 /mc绑定、/mc解绑 管理绑定。"
+      },
+      "send_test_once": {
+        "description": "发送一次测试消息（打开并保存）",
+        "type": "bool",
+        "default": false,
+        "hint": "启用监控且已配置接收者时，打开并保存排队测试。再次测试先关闭保存，再打开保存。此状态持久化防止插件重载重复测试；可使用 /mc测试。"
+      }
+    }
+  },
+  "llm": {
+    "description": "人格化通知",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用当前 AstrBot LLM",
+        "type": "bool",
+        "default": true
+      },
+      "provider_id": {
+        "description": "Provider（留空随目标会话）",
+        "type": "string",
+        "default": "",
+        "_special": "select_provider"
+      },
+      "persona_id": {
+        "description": "人格（留空随会话）",
+        "type": "string",
+        "default": "",
+        "_special": "select_persona"
+      },
+      "prompt": {
+        "description": "通知风格提示词",
+        "type": "text",
+        "default": "请以已有角色的语气，简短自然地提醒我关注服务器事件。"
+      },
+      "context_messages": {
+        "description": "只读引用最近聊天消息数",
+        "type": "int",
+        "default": 0,
+        "hint": "默认关闭；最多 6 条、总计 4000 字符。不写回聊天历史，不包含工具或系统消息。",
+        "minimum": 0,
+        "maximum": 6
+      },
+      "timeout": {
+        "description": "LLM 总超时（秒）",
+        "type": "float",
+        "default": 15.0,
+        "minimum": 0.1,
+        "maximum": 120
+      }
+    }
+  },
+  "alerts": {
+    "description": "阈值及恢复",
+    "type": "object",
+    "items": {
+      "consecutive": {
+        "description": "连续异常采样次数",
+        "type": "int",
+        "default": 3,
+        "minimum": 1,
+        "maximum": 60
+      },
+      "recover_samples": {
+        "description": "连续恢复采样次数",
+        "type": "int",
+        "default": 2,
+        "minimum": 1,
+        "maximum": 60
+      },
+      "hysteresis_percent": {
+        "description": "恢复迟滞百分比",
+        "type": "float",
+        "default": 5.0,
+        "minimum": 0,
+        "maximum": 40
+      },
+      "low_tps": {
+        "description": "TPS 低于此值告警（0 禁用）",
+        "type": "float",
+        "default": 18.0,
+        "minimum": 0,
+        "maximum": 20
+      },
+      "high_mspt": {
+        "description": "MSPT 高于此值告警（0 禁用）",
+        "type": "float",
+        "default": 50.0,
+        "minimum": 0,
+        "maximum": 10000
+      },
+      "high_cpu": {
+        "description": "容器 CPU% 告警（100%=1核，0 禁用）",
+        "type": "float",
+        "default": 400.0,
+        "minimum": 0,
+        "maximum": 100000
+      },
+      "high_memory": {
+        "description": "容器内存% 告警（0 禁用）",
+        "type": "float",
+        "default": 85.0,
+        "minimum": 0,
+        "maximum": 100
+      }
+    }
+  },
+  "events": {
+    "description": "各事件独立策略",
+    "type": "object",
+    "items": {
+      "join": {
+        "description": "玩家进入",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "normal",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 0.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "quit": {
+        "description": "玩家退出",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "normal",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 0.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "whitelist": {
+        "description": "非白名单登录",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "normal",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 60.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "auth": {
+        "description": "身份验证失败",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "normal",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 60.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "kick": {
+        "description": "被踢出",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "normal",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 60.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "ban": {
+        "description": "封禁",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "normal",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 60.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "server_start": {
+        "description": "服务端启动",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "normal",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 0.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "server_stop": {
+        "description": "服务端停止",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "normal",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 0.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "crash": {
+        "description": "崩溃迹象",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "high",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 60.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "restart": {
+        "description": "异常重启迹象",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "high",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 60.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "container": {
+        "description": "容器状态变化",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "normal",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 60.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "alert": {
+        "description": "指标/无响应告警",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "high",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 60.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "recovery": {
+        "description": "恢复通知",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "normal",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 0.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "monitor_error": {
+        "description": "采集异常与缺口",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "normal",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 60.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      },
+      "test": {
+        "description": "测试消息",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "通知开关",
+            "type": "bool",
+            "default": true
+          },
+          "level": {
+            "description": "通知等级",
+            "type": "string",
+            "default": "normal",
+            "options": [
+              "normal",
+              "high"
+            ]
+          },
+          "cooldown": {
+            "description": "同类同对象通知冷却（秒）",
+            "type": "float",
+            "default": 0.0,
+            "hint": "冷却期内记录保留并合并，冷却结束后发送。",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        }
+      }
+    }
+  }
+}

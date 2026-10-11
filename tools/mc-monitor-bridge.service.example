@@ -1,0 +1,23 @@
+[Unit]
+Description=Fixed-container read-only Minecraft Docker facade
+After=docker.service network.target
+
+[Service]
+Type=simple
+# Requires an explicitly selected host account able to read the Docker socket.
+# Do not grant this account to AstrBot, and do not expose this service publicly.
+User=mc-monitor-bridge
+Group=mc-monitor-bridge
+SupplementaryGroups=docker
+ExecStart=/opt/mc-monitor-bridge/.venv/bin/python /opt/mc-monitor-bridge/docker_readonly_bridge.py --container minecraft --listen 172.17.0.1 --token-file /etc/mc-monitor-bridge.token
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadOnlyPaths=/var/run/docker.sock
+
+[Install]
+WantedBy=multi-user.target
