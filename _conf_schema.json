@@ -298,6 +298,7 @@
         "description": "人格（留空随会话）",
         "type": "string",
         "default": "",
+        "hint": "显式选择优先；留空使用 AstrBot 按 UMO 解析的会话规则、对话及默认人格。",
         "_special": "select_persona"
       },
       "prompt": {
@@ -309,7 +310,7 @@
         "description": "只读引用最近聊天消息数",
         "type": "int",
         "default": 0,
-        "hint": "默认关闭；最多 6 条、总计 4000 字符。不写回聊天历史，不包含工具或系统消息。",
+        "hint": "默认关闭；最多 6 条、总计 4000 字符。支持纯文本与分段文本，不写回历史，不包含工具、系统、思考或媒体内容。",
         "minimum": 0,
         "maximum": 6
       },

@@ -79,6 +79,34 @@ def facts_text(events):
     return "\n\n".join(output)
 
 
+def recent_text(raw_history, count):
+    """Read bounded text only from legacy and segmented AstrBot history."""
+    try:
+        history = json.loads(raw_history or "[]")
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(history, list) or not count:
+        return []
+    result = []
+    for message in history[-count:]:
+        if not isinstance(message, dict) or message.get("role") not in ("user", "assistant"):
+            continue
+        if message.get("tool_calls") or message.get("tool_call_id"):
+            continue
+        content = message.get("content")
+        if isinstance(content, list):
+            content = "".join(
+                part["text"][:600]
+                for part in content[:32]
+                if isinstance(part, dict)
+                and part.get("type") == "text"
+                and isinstance(part.get("text"), str)
+            )
+        if isinstance(content, str) and content.strip():
+            result.append((message["role"], content[:600]))
+    return result
+
+
 class Composer:
     def __init__(self, context, log):
         self.context, self.log = context, log
@@ -101,14 +129,7 @@ class Composer:
         manager = self.context.conversation_manager
         cid = await manager.get_curr_conversation_id(target)
         conversation = await manager.get_conversation(target, cid) if cid else None
-        persona_id = cfg["llm"]["persona_id"] or getattr(conversation, "persona_id", None)
-        if persona_id == "[%None]":
-            persona = ""
-        elif persona_id:
-            persona = (await self.context.persona_manager.get_persona(persona_id)).system_prompt
-        else:
-            selected = await self.context.persona_manager.get_default_persona_v3(umo=target)
-            persona = selected.get("prompt", "")
+        persona = await self._persona(target, conversation, cfg)
         contexts = []
         count = cfg["llm"]["context_messages"]
         if count and conversation:
@@ -118,15 +139,9 @@ class Composer:
                 UserMessageSegment,
             )
 
-            history = json.loads(conversation.history or "[]")
-            for message in history[-count:]:
-                if message.get("role") in ("user", "assistant") and isinstance(
-                    message.get("content"), str
-                ):
-                    segment = (
-                        UserMessageSegment if message["role"] == "user" else AssistantMessageSegment
-                    )
-                    contexts.append(segment(content=[TextPart(text=message["content"][:600])]))
+            for role, text in recent_text(conversation.history, count):
+                segment = UserMessageSegment if role == "user" else AssistantMessageSegment
+                contexts.append(segment(content=[TextPart(text=text)]))
         # Facts, names, raw log messages and command strings never enter the model.
         # The model can only produce an opening line containing validated event category labels.
         labels = list(dict.fromkeys(LABELS[event.kind] for event in events))
@@ -156,6 +171,38 @@ class Composer:
             raise ValueError("invalid_llm_opening")
         # Category-specific facts cannot be rewritten: only the renderer contains their values.
         return opening.strip()
+
+    async def _persona(self, target, conversation, cfg):
+        manager = self.context.persona_manager
+        explicit = cfg["llm"]["persona_id"]
+        persona_id = explicit or getattr(conversation, "persona_id", None)
+        if explicit:
+            if explicit == "[%None]":
+                return ""
+            lookup = getattr(manager, "get_persona_v3_by_id", None)
+            if callable(lookup):
+                selected = lookup(explicit)
+                if selected is None:
+                    raise ValueError("persona_not_found")
+                return selected.get("prompt", "")
+        else:
+            resolve = getattr(manager, "resolve_selected_persona", None)
+            if callable(resolve):
+                # Match 4.29.1's chat pipeline, including UMO-specific overrides.
+                _, selected, _, _ = await resolve(
+                    umo=target,
+                    conversation_persona_id=persona_id,
+                    platform_name="aiocqhttp",
+                )
+                return selected.get("prompt", "") if selected else ""
+        # Older hosts without the resolver retain their original API path.
+        if persona_id == "[%None]":
+            return ""
+        elif persona_id:
+            return (await manager.get_persona(persona_id)).system_prompt
+        else:
+            selected = await manager.get_default_persona_v3(umo=target)
+            return selected.get("prompt", "")
 
 
 class Notifier:

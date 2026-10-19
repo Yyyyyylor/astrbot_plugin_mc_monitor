@@ -31,6 +31,7 @@ flowchart LR
 | `notifier.py` | 紧急/普通独立队列、按接收者重试、合并、安静时段、人格化开场与模板回退 |
 | `tools/docker_readonly_bridge.py` | 宿主指定容器的过滤GET接口，不返回Config.Env等inspect私密信息 |
 | `tools/build_package.py` | 白名单打包并复核根目录结构、源代码、Schema和排除项 |
+| `tools/check_astrbot_compat.py` | 在新建隔离目录加载4.29.1官方源码，使用真实宿主API和内存传输验证兼容性 |
 
 所有网络操作用asyncio/aiohttp并设超时；文件日志与SQLite操作在worker线程执行。SQLite操作取消时等待在途事务完成后释放锁，避免事务与下一任务交错。日志读取取消时等待只读worker收尾。任务退出后关闭HTTP session，RCON/SLP在finally关闭TCP writer。配置文件在worker读取；默认Schema只读缓存。
 
@@ -39,6 +40,8 @@ flowchart LR
 ## 官方API核对
 
 2026-10-11 开发时读取当前官方文档和AstrBot `master`相关源码；这是接口核对日期，不是对未来或所有4.x版本的运行保证。
+
+2026-10-19适配时重新核对[AstrBot v4.29.1](https://github.com/AstrBotDevs/AstrBot/tree/dffe922773725e9c178392c423676ad65044748c)。LLM、主动发送、UMO、配置注入及生命周期接口继续可用；留空人格改用该版本的[PersonaManager.resolve_selected_persona](https://github.com/AstrBotDevs/AstrBot/blob/v4.29.1/astrbot/core/persona_mgr.py)，遵循会话规则优先级。显式人格使用宿主v3查询（含内置默认人格），旧宿主无此接口时保留原API路径。最近上下文提取分段消息中的text部分，再创建官方消息类型，不传入工具、思考或媒体。
 
 | 用途 | 核实接口 | 官方来源 |
 | --- | --- | --- |

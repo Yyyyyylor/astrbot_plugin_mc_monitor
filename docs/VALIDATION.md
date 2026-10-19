@@ -1,5 +1,26 @@
 # 验证记录
 
+## 1.0.1 / AstrBot 4.29.1（2026-10-19）
+
+核对[官方v4.29.1发布记录](https://github.com/AstrBotDevs/AstrBot/releases/tag/v4.29.1)及固定提交 `dffe922773725e9c178392c423676ad65044748c`。该版本宿主要求Python ≥3.12，现有插件版本范围 `>=4.9.2,<5` 已包含4.29.1，无需放宽约束。
+
+- **81项自动测试通过**，包含11项新增人格优先级、旧版回退、分段/纯文本混合上下文及异常历史检查；Ruff检查与格式检查通过。
+- 用官方4.29.1源码运行`tools/check_astrbot_compat.py`，通过**10组宿主API兼容检查**。使用Windows、Python 3.12.12与已有桌面端依赖，所有宿主数据写入新建的工作区隔离目录；未修改、升级、启动或重启现有桌面端/容器。
+- 使用真实`PluginManager`加载metadata与完整Schema，验证5个命令、4个后台任务、配置默认值、重载时旧任务取消、重复事件不重新排队、停用后任务结束。
+- 使用真实`Context`、`PersonaManager`、`ConversationManager`和宿主SQLite：UMO会话规则覆盖对话人格，显式选择默认人格优先，`[%None]`禁用人格生效。纯文本上下文通过真实官方`Message`/`TextPart`类型传入。
+- 实际调用官方`Context.llm_generate`和`Context.send_message`；Provider请求与平台发送使用内存替身，验证参数、失败模板、私聊不写群历史、后台队列完成发送，以及正常对话历史前后完全不变。这不代表真实QQ送达或真实LLM可用。
+- 发布产物为[1.0.1安装ZIP与SHA-256校验文件](https://github.com/Yyyyyylor/astrbot_plugin_mc_monitor/releases/tag/v1.0.1)，保留已有1.0.0版本；安装包不含隔离宿主源码、环境依赖或测试数据库。
+
+复现命令：在插件根目录、已具备AstrBot 4.29.1依赖的Python环境中执行。`--astrbot-source`指向上述官方版本源码根目录；`--work-dir`必须是不存在的新目录，工具会拒绝覆盖已有目录。
+
+```powershell
+python -X utf8 tools/check_astrbot_compat.py --astrbot-source path/to/AstrBot-v4.29.1 --work-dir .pytest_cache/compat-4.29.1/run-new
+```
+
+此轮没有打开4.29.1 WebUI做视觉验收、运行完整宿主服务或连接生产MC、Docker、FRP、QQ和付费LLM；原生面板视觉验证仍为下面记录的4.27.5版本。1.0.1在旧宿主的回退路径由自动测试覆盖，未重新部署旧版桌面端。
+
+## 1.0.0历史验证
+
 验证日期：2026-10-11。先在当前Windows工作区、独立`.venv`、Python 3.12.9完成隔离测试；随后经用户授权，在已打开的AstrBot桌面端4.27.5中实际安装并测试。桌面后端使用Python 3.12.12、aiohttp 3.14.3。两轮均未连接Ubuntu、现有MC或FRP，未发送真实QQ消息，也未调用真实LLM。
 
 ## 已完成
@@ -54,10 +75,10 @@
 | 真实MC版本及模组 | 日志格式、白名单/踢出/封禁文案、watchdog/崩溃日志覆盖 |
 | 真实Paper/RCON | 命令权限、服务端版本输出格式、RCON分包与空命令响应；不支持时显示不可用 |
 | 真实Docker Engine | API v1.41兼容性、socket访问、桥接监听地址、cgroup内存/CPU数据 |
-| 其他AstrBot环境 | 桌面端4.27.5已验证上述加载与采集流程；AstrBot Docker、其他版本及真实UMO人格规则仍待联调 |
+| 其他AstrBot环境 | 桌面端4.27.5已验证上述加载与采集流程，4.29.1的宿主API隔离验证见上节；4.29.1 WebUI、AstrBot Docker、其他版本及真实UMO人格规则仍待联调 |
 | OneBot/QQ | 实际私聊UMO、协议端主动发送能力、平台限制与用户收到消息 |
 | 已配置LLM | Provider可用性、人格效果、响应时延和实际调用费用 |
 | 长时间运行 | 未进行真实数日/数周浸泡测试；测试覆盖故障恢复，不提供未经实测的长期稳定性结论 |
-| Python版本矩阵 | 实际测试3.12.9；代码面向3.10+，未逐版本运行完整测试 |
+| Python版本矩阵 | 单元测试使用3.12.9、宿主API验证使用3.12.12；插件代码面向3.10+，4.29.1宿主本身要求3.12+，未逐版本运行完整测试 |
 
-完整实机验收步骤见[部署说明](DEPLOYMENT.md)。生产稳定性仍取决于这些外部条件，不能把70项隔离测试和本次短时桌面端验证等同于已在现有服务长期运行。
+完整实机验收步骤见[部署说明](DEPLOYMENT.md)。生产稳定性仍取决于这些外部条件，不能把自动测试、宿主API隔离验证和短时桌面端验证等同于已在现有服务长期运行。

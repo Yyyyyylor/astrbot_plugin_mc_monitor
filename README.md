@@ -2,7 +2,7 @@
 
 面向 Docker 部署的 Minecraft Java 服务端持续监控插件。通过日志增量读取识别真实事件，使用 AstrBot 当前 LLM 与已有角色人格生成通知开场，再通过官方主动消息接口发送 QQ 私聊。默认关闭监控，安装本身不会连接或改动 MC、FRP、Docker 或其他服务。
 
-当前版本：**1.0.0**。作者：Cheney。要求 Python ≥3.10、AstrBot ≥4.9.2 且 <5、OneBot v11 `aiocqhttp` 适配器。依赖仅 `aiohttp`；Windows 开发额外使用 `tzdata`。没有注册外部 LLM、聊天系统或工具。
+当前版本：**1.0.1**。作者：Cheney。插件代码要求 Python ≥3.10、AstrBot ≥4.9.2 且 <5、OneBot v11 `aiocqhttp` 适配器；**AstrBot 4.29.1 本身要求 Python ≥3.12**。已对4.29.1官方源码进行隔离兼容验证。依赖仅 `aiohttp`；Windows 开发额外使用 `tzdata`。没有注册外部 LLM、聊天系统或工具。
 
 [GitHub 仓库](https://github.com/Yyyyyylor/astrbot_plugin_mc_monitor) · [版本与安装包](https://github.com/Yyyyyylor/astrbot_plugin_mc_monitor/releases) · [问题反馈](https://github.com/Yyyyyylor/astrbot_plugin_mc_monitor/issues)
 
@@ -30,7 +30,9 @@
 https://github.com/Yyyyyylor/astrbot_plugin_mc_monitor
 ```
 
-需要固定版本时，下载 [v1.0.0 安装包](https://github.com/Yyyyyylor/astrbot_plugin_mc_monitor/releases/download/v1.0.0/astrbot_plugin_mc_monitor-v1.0.0.zip)，通过“从文件安装”上传 ZIP。Release 同时提供 SHA-256 校验文件。也可以将完整插件目录复制到 AstrBot 的 `data/plugins/astrbot_plugin_mc_monitor/`。入口 `main.py`、`metadata.yaml`、`_conf_schema.json` 和 `mc_monitor/` 必须位于同一个插件根目录。
+需要固定版本时，下载 [v1.0.1 安装包](https://github.com/Yyyyyylor/astrbot_plugin_mc_monitor/releases/download/v1.0.1/astrbot_plugin_mc_monitor-v1.0.1.zip)，通过“从文件安装”上传 ZIP。Release 同时提供 SHA-256 校验文件。也可以将完整插件目录复制到 AstrBot 的 `data/plugins/astrbot_plugin_mc_monitor/`。入口 `main.py`、`metadata.yaml`、`_conf_schema.json` 和 `mc_monitor/` 必须位于同一个插件根目录。
+
+1.0.1包含4.29.1的人格与上下文适配。升级前保留 AstrBot 的 `data` 持久卷，现有配置字段、默认值及游标格式不变。
 
 尚未提交 AstrBot 插件市场；GitHub 仓库与 Release 是本插件的发布渠道。桌面端 4.27.5 已验证本地 ZIP 安装，其他版本以实际安装入口为准。
 
@@ -76,7 +78,7 @@ UMO 形式是 **`真实平台实例ID:FriendMessage:真实session_id`**。例如
 
 ## 人格、事实与安全
 
-使用官方 `Context.get_current_chat_provider_id(umo=...)`、`Context.llm_generate(...)`、人格/对话管理器，以及 `Context.send_message(umo, MessageChain)`。显式人格优先，其次当前对话人格，再按 UMO 读取默认人格。可只读引用最近0～6条文本聊天，默认0；不创建、更新、切换或追加正常聊天历史。
+使用官方 `Context.get_current_chat_provider_id(umo=...)`、`Context.llm_generate(...)`、人格/对话管理器，以及 `Context.send_message(umo, MessageChain)`。显式人格优先；留空时在4.29.1调用 `resolve_selected_persona`，遵循宿主按UMO设置的会话规则、当前对话人格及默认人格。旧版宿主没有此接口时沿用对话/默认人格API。可只读引用最近0～6条文本聊天，默认0；同时支持纯文本和分段消息，排除工具、思考及媒体内容，不创建、更新、切换或追加正常聊天历史。
 
 日志是非可信输入。解析层只保留匹配规则提取出的名字、UUID、时间、数值和固定原因代码；不把日志原文、IP、踢出理由原文送给模型。模型仅获得已识别的事件类别，按角色语气从安全开场句中选择一句，返回严格校验的JSON。**事实字段始终由程序原样附加**。不符合约束、超时、Provider/人格不可用均降级模板。此约束有意限制自由发挥，不能仅靠提示词保证模型永远不捏造事实。
 
@@ -110,4 +112,4 @@ uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
 
 依次用于创建隔离环境、安装开发依赖、运行隔离测试、静态检查、格式检查、生成可安装ZIP。测试只使用临时文件、SQLite、本地协议服务器及 AstrBot API 测试替身，无真实 QQ 消息或付费 LLM 请求。
 
-已验证与未验证范围见 [验证记录](docs/VALIDATION.md)，模块和官方API依据见 [架构说明](docs/ARCHITECTURE.md)。已在 AstrBot 桌面端 4.27.5 实际安装，验证原生配置保存、模拟日志采集、去重、轮转、重载续读、来源中断恢复、配置回退和停用。尚未在用户 Ubuntu 24.04、真实 MC/Paper、FRP、AstrBot Docker、QQ 与配置的 LLM 上联调；不能把隔离测试和短时桌面验证等同于生产验证。
+已验证与未验证范围见 [验证记录](docs/VALIDATION.md)，模块和官方API依据见 [架构说明](docs/ARCHITECTURE.md)。1.0.0已在 AstrBot 桌面端4.27.5实际安装测试；1.0.1已在4.29.1官方源码下验证实际加载器、配置、人格、消息类型、LLM/发送API及生命周期，外部传输使用内存替身。尚未在用户 Ubuntu 24.04、真实 MC/Paper、FRP、AstrBot Docker、QQ 与配置的 LLM 上联调；不能把隔离测试和短时桌面验证等同于生产验证。

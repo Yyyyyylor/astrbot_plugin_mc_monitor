@@ -32,7 +32,12 @@ COMPONENTS = [
     "notifier.py",
 ]
 DOCS = ["CONFIGURATION.md", "DEPLOYMENT.md", "ARCHITECTURE.md", "VALIDATION.md"]
-TOOLS = ["docker_readonly_bridge.py", "mc-monitor-bridge.service.example", "build_package.py"]
+TOOLS = [
+    "docker_readonly_bridge.py",
+    "mc-monitor-bridge.service.example",
+    "build_package.py",
+    "check_astrbot_compat.py",
+]
 
 
 def main():
